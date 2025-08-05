@@ -13,7 +13,31 @@ def handle_query(query, model_gemini):
     index = load_index()
     D, I = index.search(np.array(query_embedding), k=5)
     
-    top_clauses = [metadata[i]["content"] for i in I[0] if i < len(metadata)]
-    top_text = "\n\n".join([f"- {clause}" for clause in top_clauses])
+    # Build context from analyzed insurance data
+    context_parts = []
+    for i in I[0]:
+        if i < len(metadata):
+            chunk = metadata[i]
+            analysis = chunk.get("analysis", {})
+            
+            context_part = f"""
+**{analysis.get('clause_reference', 'Unknown Section')}**
+Summary: {analysis.get('summary', 'No summary available')}
+Key Points: {', '.join(analysis.get('key_points', []))}
+Tags: {', '.join(analysis.get('tags', []))}
+Original Content: {chunk.get('raw_content', '')[:200]}...
+"""
+            context_parts.append(context_part)
+    
+    context = "\n".join(context_parts)
+    
+    enhanced_prompt = f"""Based on the following insurance policy information, provide a comprehensive answer to the user's query:
 
-    return ask_gemini(model_gemini, query, top_text)
+INSURANCE POLICY CONTEXT:
+{context}
+
+USER QUERY: {query}
+
+Please provide a clear, accurate response based on the policy information above. Include relevant clause references and specific conditions when applicable."""
+
+    return ask_gemini(model_gemini, enhanced_prompt, "")
